@@ -1,0 +1,133 @@
+---
+title: "Reproducible Research: Peer Assessment 1"
+output: 
+  html_document:
+    keep_md: true
+---
+
+
+## Loading and preprocessing the data
+
+```{r, echo = TRUE, message = FALSE}
+getwd()
+raw <- read.csv("activity.csv")
+```
+
+## What is mean total number of steps taken per day?
+```{r,echo = TRUE}
+stepsDay <- aggregate(raw$steps, by = list(raw$date), FUN = sum, na.rm = TRUE)
+names(stepsDay) <- c('Date', 'TotalSteps')
+stepsDay
+```
+### Histogram of the total number of steps taken each day
+```{r,echo = TRUE, message = FALSE}
+require(ggplot2)
+ts <- ggplot(stepsDay, aes(TotalSteps))
+ts + geom_bar() + ylab("Number of days") + xlab("Total Number of Steps")
+```
+
+### mean and median of the total number of steps per day
+
+```{r, echo = TRUE}
+meanStepsDay <- mean(stepsDay$TotalSteps)
+medianStepsDay <- median(stepsDay$TotalSteps)
+meanMed <- data.frame(meanStepsDay, medianStepsDay)
+meanMed
+```
+
+## What is the average daily activity pattern?
+```{r, echo = TRUE}
+avgInt <- aggregate(raw$steps, by = list(raw$interval), FUN = mean, na.rm = TRUE)
+plot(x = avgInt$Group.1, y = avgInt$x, ylab = "Average Number of Steps", xlab = "5 Min Interval", type = "l" )
+```
+
+### Which 5-minute interval, on average across all the days in the dataset, contains the maximum number of steps?
+
+```{r, echo = TRUE}
+maxStepInt <- subset(avgInt, x==max(avgInt$x))[1]
+names(maxStepInt) <- c("Int. Start Minute")
+maxStepInt
+```
+
+## Imputing missing values
+
+### Calculate and report the total number of missing values in the dataset 
+```{r, echo = TRUE}
+dim(raw)[1] - sum(complete.cases(raw),na.rm = TRUE)
+```
+
+### Replace missing values in the dataset 
+
+- Strategy: replace NA with mean steps for the interval
+- calculate the mean for each interval 
+- Duplicate the steps column for NA replacement (keep original steps column)
+- Replace Na's in Duplicate steps column
+- check 
+
+```{r, echo = TRUE, message = FALSE}
+require(plyr)
+meanRaw <- ddply(raw,.(interval), summarize, mean=mean(steps,na.rm=TRUE))
+raw$stepsNaR <- raw$steps
+raw$stepsNaR[is.na(raw$stepsNaR)] <- meanRaw$mean[match(raw$interval,meanRaw$interval)][is.na(raw$stepsNaR)]
+length(raw$stepsNaR[(is.na(raw$stepsNaR))])
+```
+
+
+### Create a new dataset with the missing data filled in
+
+```{r, Echo = TRUE}
+rawNaR <- raw[,-1]
+names(rawNaR)[3] <- "steps"
+str(rawNaR)
+```
+
+### Histogram of the total number of steps taken each day (NA's replaced)
+
+```{r, Echo = TRUE, message = FALSE}
+stepsDayNaR <- aggregate(rawNaR$steps, by = list(rawNaR$date), FUN = sum, na.rm = TRUE)
+names(stepsDayNaR) <- c('Date', 'TotalSteps')
+require(ggplot2)
+ts2 <- ggplot(stepsDayNaR, aes(TotalSteps))
+ts2 + geom_bar() + ylab("Number of days") + xlab("Total Number of Steps")
+```
+
+### Mean and median total number of steps taken per day after NA replacment  
+
+```{r, Echo = TRUE, message = FALSE}
+meanStepsDayNaR <- mean(stepsDayNaR$TotalSteps)
+medianStepsDayNaR <-median(stepsDayNaR$TotalSteps)
+mComp <- data.frame(mean = c(meanStepsDay,meanStepsDayNaR), 
+                    median = c(medianStepsDay,medianStepsDayNaR),
+                    row.names = c("With NAs", "NAs Replaced"))
+mComp
+```
+### Do these values differ from the estimates from the first part of the assignment? 
+
+The mean increased from 9,354 to 10,766. Interestingly the mean and median are the same once Na's are replaced.
+
+### What is the impact of imputing missing data on the estimates of the total daily number of steps?
+```{r, echo = TRUE}
+totalStepsAdded <- sum(stepsDayNaR$TotalSteps) - sum(stepsDay$TotalSteps)
+percIncrease <- (sum(stepsDayNaR$TotalSteps) - sum(stepsDay$TotalSteps))/sum(stepsDay$TotalSteps)
+NaRImpact <- data.frame(totalStepsAdded, percIncrease)
+NaRImpact
+ 
+```
+Replacing the Na's' added 86k steps, or 15%
+
+## Are there differences in activity patterns between weekdays and weekends?
+
+### Create a 2 level factor variable: “weekday” and “weekend” 
+
+```{r, echo = TRUE}
+rawNaR$Weekday <- ifelse(weekdays(as.Date(rawNaR$date)) %in% c("Saturday", "Sunday"), "Weekend", "Week")
+```
+
+### Panel plot: Weekend vs weekday average steps per interval 
+
+```{r, echo = TRUE, message = FALSE}
+require(ggplot2)
+meanRawNaRWk <- ddply(rawNaR,.(interval, Weekday), summarize, 
+                           mean=mean(steps,na.rm=TRUE))
+g <- ggplot(meanRawNaRWk, aes(interval, mean))
+g + geom_line() + facet_wrap(~Weekday, ncol=1) 

@@ -1,0 +1,105 @@
+x`---
+title: "Which Storm Types Are The Most Harmful?"
+author: "Steffen Hartleib"
+date: "May 18, 2015"
+output: html_document
+---
+## Summary
+To identify the storms that cause the most health and economic damage I analzyed a data set from U.S. National Oceanic and Atmospheric Administration's (NOAA) storm database. The data tracks major storm events in the United States, including when and where they occur, as well as estimates of any fatalities, injuries, and property damage.  
+I used the fatalities as a measure of health impact and the sum of crop and property damage as as the measure of economic impact.  
+
+15 Storm events caused 80% of the Fatalities while 7 Storm events caused 80% of the economic damge. Tornados and Flash Floods are in the top three of both lists.
+ 
+
+## Processing
+I reduced the data set to the five relevant columns: Event Type, Beginning Date, Fatalities, Property Damage, and Crop damage. 
+I also add a "Year" column to make it easier to track events and their impact over time.
+
+```{r, message = FALSE}
+require(dplyr)
+require(reshape2)
+require(ggplot2)
+options(scipen=999)
+storm <- read.csv(bzfile("repdata-data-StormData.csv.bz2"))
+storm <- select(storm,EVTYPE,BGN_DATE,FATALITIES,CROPDMG,PROPDMG)
+storm$BGN_DATE <- as.Date(storm$BGN_DATE, format = "%m/%d/%Y %H:%M:%S")
+storm <- mutate(storm, Year = as.POSIXlt(storm$BGN_DATE)$year  + 1900)
+
+```
+The data set spans from 1950 to 2011. But between 1950 and 1983 the data measures only tornado related fatalities. Between 1983 and 1993 the Tornado related fatalities drop as as a percentage of total, as data from other storm types are recorded. Starting 1993 they're fairly constant for the next 20 years. 
+Damages behave similiarly. Until 1993 the data only shows Tornado related damages. Since it's very unlikely that Tornados became about 80% less amaging during the 80s I assumed that this early Tornado bias exists because data from other storms wasn't collected before 1983 and 1993 respectively. To allow for a meaningful comparison of Storm Types I excluded data from before 1993. 
+
+#### Figure 1 
+```{r, echo = TRUE, message= FALSE}
+# Tornado related fataltities and damages per year
+TorFatDamYear <- filter(storm, storm$EVTYPE == "TORNADO")
+TorFatDamYear <- group_by(TorFatDamYear, Year)
+TorFatDamYear <- summarize(TorFatDamYear, 
+                        TorFat = sum(FATALITIES),
+                        TorDam = sum(CROPDMG + PROPDMG))
+# Total fatalites and damages per year
+TotFatDamYear <- group_by(storm, Year)
+TotFatDamYear <- summarize(TotFatDamYear, 
+                        TotFat = sum(FATALITIES),
+                        TotDam = sum(CROPDMG + PROPDMG))
+# Damagas and fatalities as percentage of yearly totals
+TorVsTotYear <- data.frame(TotFatDamYear, TorFatDamYear[,-1])
+TorVsTotYear <- mutate(TorVsTotYear, TornFatVsTot = round(TorFat/TotFat,2), 
+                        TornDamVsTot = round(TorDam/TotDam,2))
+TorVsTotYear <- select(TorVsTotYear, Year, TornFatVsTot, TornDamVsTot)
+
+ggplot(TorVsTotYear, aes(Year)) +
+                     geom_line(aes(y = TornFatVsTot, color = "TornFatVsTot")) +
+                     geom_line(aes(y = TornDamVsTot, color = "TornDamVsTot")) +
+                     labs(title = "Tornado related Fatalities & Damages", x = "Year", 
+                     y = "Percentage of Yearly Total" ) + scale_color_manual("Tornado related:\n", labels = c("Crop + Property Damages","Fatalities"), values = c("red","blue"))
+
+````
+
+## Results
+### Health Impact
+I used the  total number of fatalities per Event Type as the measure of health impact. To answer the question "which storms are the most harmful", I identified the set of most harmful Event Types that caused 80% of the total damage. The table below shows Event Types ranked by total Fatalities, along with a column showing for each Event Type the percentage of Total Fatalities, and the cumulative percentage of Total Fatalities. It turns out that 80% of the fatalties are caused by just 15 Event Types. The results are shown the in the following table.
+
+
+
+```{r, Echo = TRUE, message = FALSE}
+storm93 <- filter(storm, Year > 1992)
+FatTot <- sum(storm93$FATALITIES)
+HealthImpact <- select(storm93, EVTYPE,FATALITIES) %>%
+        group_by(EVTYPE) %>%
+        summarise(TotFat = sum(FATALITIES),FatPercOfTotFat = round(sum(FATALITIES)/FatTot,2)) %>% 
+        arrange(- TotFat) %>%
+        mutate(CumeFatPercTotFat = cumsum(FatPercOfTotFat)) %>%
+        filter(CumeFatPercTotFat <= .8)
+colnames(HealthImpact) <- c("StormType", "Fatalities", "FatalitiesPercofTotal", "CumeFatalitiesPerc")
+HealthImpact
+```
+#### Figure 2
+```{r, Echo = TRUE, message = FALSE}
+HealthImpact$StormType <- reorder(HealthImpact$StormType, HealthImpact$Fatalities)
+ggplot(HealthImpact, aes(x = StormType, y = Fatalities)) + geom_bar(stat = "Identity") + coord_flip() + labs(title = "15 Storm Types Caused 80% of Fatalites", y = "Number of Fatalties between 1993 and 2011", x = "Storm Type")
+```
+
+### Ecomonic Impact
+
+I used the sum of crop and property damage as the measure of economic impact.  I applied the same 80% logic as above. It turns out that Economic impact is even more concentrated than the Health impact. Only 7 Storm Event Types are causing 81% of the damage. The results are shown in the following table.
+
+```{r, Echo = TRUE}
+DamTot <- sum(storm93$CROPDMG + storm93$PROPDMG)
+EconImpact <- select(storm93, EVTYPE,CROPDMG,PROPDMG) %>%
+group_by(EVTYPE) %>%
+summarise( TotDam = round(sum(CROPDMG +PROPDMG),0),
+           DamPercOfTotDam = round(sum(CROPDMG +PROPDMG)/DamTot,2)) %>%
+arrange(- TotDam) %>%
+mutate(CumeDamPercTotDam = cumsum(DamPercOfTotDam))%>%
+filter(CumeDamPercTotDam <= .81)
+colnames(EconImpact) <- c("StormType","Damage", "DamagePercTotal", "CumeDamagePerc")
+EconImpact
+```
+#### Figure 3
+```{r, Echo = TRUE}
+EconImpact$StormType <- reorder(EconImpact$StormType, EconImpact$Damage)
+ggplot(EconImpact, aes(x = StormType, y = Damage)) + geom_bar(stat = "Identity") + coord_flip() + labs(title = "7 Storm Types Caused 80% of Damages", y = "Damages between 1993 and 2011,($US 000's)", x = " Storm Type")
+
+```
+

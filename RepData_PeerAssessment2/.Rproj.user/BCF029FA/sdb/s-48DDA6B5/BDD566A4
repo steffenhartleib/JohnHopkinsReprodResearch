@@ -1,0 +1,17 @@
+{
+    "contents" : "setwd(\"/Users/steffenhartleib/CourseraReproducibleResearch/RepData_PeerAssessment2\")\ndir()\nstorm <- read.csv(\"repdata-data-StormData.csv\", header = TRUE)\nlibrary(dplyr)\nhead(storm)\ndim(storm)\nstr(storm)\nnames(storm)\n\nsum(is.na(storm))\nsum(complete.cases(storm))\n\n# Total Fatalities & Injuries\nbyEvtype <- group_by(storm, EVTYPE)\nbyEvtype\nFatInjEv <- summarise(byEvtype, TotalFat = sum(FATALITIES), TotalInj = sum(INJURIES))\nFatInjEv <- filter(FatInjEv, TotalFat > 0)\nFatInjEv <- arrange(FatInjEv, -TotalIncidents)\nFatInjEv <- mutate(FatInjEv, TotalIncidents = TotalFat + \n                           TotalInj, FatPerc = TotalFat/TotalIncidents)\nFatInjEv <- arrange(FatInjEv, -TotalIncidents, - TotalFat)\n\n# Over time\n\n# create a new variable \"Year\"\nstorm$BGN_DATE <- as.Date(storm$BGN_DATE, format = \"%m/%d/%Y %H:%M:%S\")\nstorm <- mutate(storm, year = as.POSIXlt(storm$BGN_DATE)$year +1900)\n\n# Tornado fatalites per yer\n\nTornados <- filter(stor, EVTYPE = \"Tornado\")\n\n\n\n\n\n\n\n\n\n\n        ",
+    "created" : 1431521576037.000,
+    "dirty" : true,
+    "encoding" : "UTF-8",
+    "folds" : "",
+    "hash" : "2691887996",
+    "id" : "BDD566A4",
+    "lastKnownWriteTime" : 1431645685,
+    "path" : "~/CourseraReproducibleResearch/RepData_PeerAssessment2/PA2_Scratch.R",
+    "project_path" : "PA2_Scratch.R",
+    "properties" : {
+        "tempName" : "Untitled1"
+    },
+    "source_on_save" : false,
+    "type" : "r_source"
+}
